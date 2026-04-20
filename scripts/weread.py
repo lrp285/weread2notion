@@ -392,25 +392,43 @@ if __name__ == "__main__":
     weread_cookie = get_cookie()
     database_id = extract_page_id()
     notion_token = os.getenv("NOTION_TOKEN")
+    
+    # 读取强制同步的书 ID（多个用英文逗号分隔）
+    force_book_ids_str = os.getenv("FORCE_BOOK_IDS", "").strip()
+    force_book_ids = [bid.strip() for bid in force_book_ids_str.split(",") if bid.strip()] if force_book_ids_str else []
+    if force_book_ids:
+        print(f"补充强制同步模式，将同步以下 bookId（忽略 sort 判断）: {force_book_ids}")
+    else:
+        print("正常增量同步模式")
+    
     session = requests.Session()
     session.cookies = parse_cookie_string(weread_cookie)
     client = Client(auth=notion_token, log_level=logging.ERROR)
     session.get(WEREAD_URL)
     latest_sort = get_sort()
     books = get_notebooklist()
-    if books != None:
+    
+    if books is not None:
         for index, book in enumerate(books):
             sort = book["sort"]
-            if sort <= latest_sort:
-                continue
-            book = book.get("book")
-            title = book.get("title")
-            cover = book.get("cover").replace("/s_", "/t7_")
-            bookId = book.get("bookId")
-            author = book.get("author")
-            categories = book.get("categories")
-            if categories != None:
+            book_info = book["book"]
+            title = book_info["title"]
+            cover = book_info["cover"].replace("/s_", "/t7_")
+            bookId = book_info["bookId"]
+            author = book_info["author"]
+            categories = book_info.get("categories")
+            if categories is not None:
                 categories = [x["title"] for x in categories]
+            
+            # 判断是否强制同步这本书
+            force_this = bookId in force_book_ids
+            if force_this:
+                print(f"强制同步 {title} ({bookId})，忽略 sort 比较")
+            else:
+                if sort <= latest_sort:
+                    print(f"跳过 {title} ({bookId})，sort {sort} <= latest_sort {latest_sort}")
+                    continue
+            
             print(f"正在同步 {title} ,一共{len(books)}本，当前是第{index+1}本。")
             check(bookId)
             isbn, rating = get_bookinfo(bookId)
@@ -437,5 +455,7 @@ if __name__ == "__main__":
             )
             children, grandchild = get_children(chapter, summary, bookmark_list)
             results = add_children(id, children)
-            if len(grandchild) > 0 and results != None:
+            if len(grandchild) > 0 and results is not None:
                 add_grandchild(grandchild, results)
+    else:
+        print("未获取到笔记本列表，请检查网络或 cookie")
