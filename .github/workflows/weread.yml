@@ -2,8 +2,14 @@ name: weread sync
 
 on:
   workflow_dispatch:
+    inputs:
+      book_ids:
+        description: '强制同步的书ID（多个用英文逗号分隔）'
+        required: false
+        default: ''
   schedule:
     - cron: "0 0 * * *"
+
 jobs:
   sync:
     name: Sync
@@ -17,6 +23,7 @@ jobs:
       CC_ID: ${{ secrets.CC_ID }}
       CC_PASSWORD: ${{ secrets.CC_PASSWORD }}
       YEAR: ${{ vars.YEAR }}
+      FORCE_BOOK_IDS: ${{ github.event.inputs.book_ids }}   # 新增这一行
     steps:
       - name: Checkout
         uses: actions/checkout@v3
